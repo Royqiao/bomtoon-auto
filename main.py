@@ -15,7 +15,6 @@ RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL")
 TASK_TYPE = os.environ.get("TASK_TYPE", "").strip().lower()
 
 def send_email(subject, body, image_path=None, retries=3):
-    """发送邮件通知，增加重试机制"""
     if not all([SENDER_EMAIL, SENDER_PASS, RECEIVER_EMAIL]):
         print("邮件配置不完整，跳过发送。")
         return
@@ -41,8 +40,8 @@ def send_email(subject, body, image_path=None, retries=3):
         except Exception as e:
             print(f"❌ 第 {attempt + 1} 次邮件发送失败: {e}")
             if attempt < retries - 1:
-                time.sleep(5)
-    print("❌ 邮件发送最终失败，已达到最大重试次数。")
+                time.sleep(3)
+    print("❌ 邮件发送最终失败。")
 
 def main():
     with sync_playwright() as p:
@@ -64,23 +63,26 @@ def main():
             page.fill('input[type="password"]', BOMTOON_PASS)
 
             print("点击登录按钮...")
-            # 尝试多种方式点击登录按钮，增加超时和强制点击选项
             try:
-                # 方式一：通过文本点击，增加超时时间至10秒
-                page.get_by_text("登入", exact=True).click(timeout=10000)
-            except:
-                try:
-                    # 方式二：通过 submit 按钮点击
-                    page.locator('button[type="submit"]').first.click(timeout=10000)
-                except:
-                    # 方式三：强制点击，忽略遮挡检查
-                    page.get_by_text("登入", exact=True).click(timeout=10000, force=True)
+                # 精确打击：找 role 为 button 且名字是“登入”的元素
+                page.get_by_role("button", name="登入").click(timeout=10000)
+            except Exception as e:
+                print(f"尝试点击按钮失败，改用回车键提交: {e}")
+                # 备用方案：直接在密码框里按回车键
+                page.press('input[type="password"]', 'Enter')
 
             page.wait_for_timeout(5000)
+            print("登录动作完成，准备前往活动页面...")
 
-            print("正在前往活动中心页面...")
             page.goto("https://www.bomtoon.tw/play", timeout=60000)
             page.wait_for_timeout(5000)
+
+            # 判断是否真的登录成功了
+            if "user/login" in page.url:
+                print("⚠️ 警告：好像还停留在登录页面，登录可能失败了！")
+                page.screenshot(path="login_fail.png", full_page=True)
+                send_email("[Bomtoon] 登录失败", "脚本未能成功登录，请查看截图。", "login_fail.png")
+                return
 
             if not TASK_TYPE:
                 TASK_TYPE = "all"
@@ -93,12 +95,11 @@ def main():
                         check_btn.click(timeout=10000)
                         page.wait_for_timeout(3000)
                         page.screenshot(path="checkin_result.png", full_page=True)
-                        print("签到成功，准备发送邮件。")
-                        send_email("[Bomtoon] 每日签到成功", "今天的 Bomtoon 签到已完成，详情见附图。", "checkin_result.png")
+                        send_email("[Bomtoon] 每日签到成功", "签到完成，详情见附图。", "checkin_result.png")
                     else:
                         print("⚠️ 签到按钮不可用，可能今天已签到。")
                 except Exception as e:
-                    print(f"签到执行出错: {e}")
+                    print(f"签到出错: {e}")
 
             if TASK_TYPE in ["wheel", "all"]:
                 print("开始执行 Lucky 大转盘...")
@@ -106,32 +107,21 @@ def main():
                     start_btn = page.get_by_role("button", name="START")
                     if start_btn.is_visible() and start_btn.is_enabled():
                         start_btn.click(timeout=10000)
-                        print("已点击转盘，等待动画结束...")
+                        print("已点击转盘，等待动画...")
                         page.wait_for_timeout(8000)
                         page.screenshot(path="wheel_result.png", full_page=True)
-
-                        reward_text = "转盘已触发，请查看附图确认奖励。"
-                        try:
-                            reward_el = page.locator(".reward-popup, .result-text, [class*='toast'], [class*='modal']").first
-                            if reward_el.is_visible():
-                                reward_text = reward_el.inner_text()
-                        except:
-                            pass
-
-                        print(f"抽奖结束，发送邮件: {reward_text}")
-                        send_email("[Bomtoon] 大转盘抽奖结果", f"抽奖结果：{reward_text}\n请查看附图。", "wheel_result.png")
+                        send_email("[Bomtoon] 大转盘抽奖结果", "转盘已触发，请查看附图。", "wheel_result.png")
                     else:
-                        print("⚠️ 转盘 START 按钮不可用，可能未到冷却时间。")
+                        print("⚠️ 转盘 START 按钮不可用。")
                 except Exception as e:
-                    print(f"转盘执行出错: {e}")
+                    print(f"转盘出错: {e}")
 
         except Exception as e:
-            print(f"❌ 执行过程中出现严重异常: {e}")
+            print(f"❌ 执行异常: {e}")
             page.screenshot(path="error.png", full_page=True)
-            send_email("[Bomtoon] 任务执行异常", f"错误信息: {e}\n请查看附图错误现场。", "error.png")
+            send_email("[Bomtoon] 任务执行异常", f"错误信息: {e}", "error.png")
         finally:
             browser.close()
-            print("浏览器已关闭。")
 
 if __name__ == "__main__":
     main()
