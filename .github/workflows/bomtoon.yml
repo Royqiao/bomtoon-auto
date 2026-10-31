@@ -1,10 +1,8 @@
 name: Bomtoon Auto
 on:
   schedule:
-    # 每日签到（UTC 02:00，北京时间 10:00）
-    - cron: '0 2 * * *'
-    # 每12小时转盘一次（UTC 0:30 和 12:30，对应北京时间 8:30 和 20:30）
-    - cron: '30 */12 * * *'
+    # 每 5 小时触发一次（UTC 0, 5, 10, 15, 20点）
+    - cron: '0 */5 * * *'
   workflow_dispatch: # 支持手动触发测试
 
 jobs:
@@ -27,9 +25,9 @@ jobs:
         env:
           BOMTOON_USER: ${{ secrets.BOMTOON_USER }}
           BOMTOON_PASS: ${{ secrets.BOMTOON_PASS }}
+          BOMTOON_COM_USER: ${{ secrets.BOMTOON_COM_USER }}
+          BOMTOON_COM_PASS: ${{ secrets.BOMTOON_COM_PASS }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           SENDER_PASS: ${{ secrets.SENDER_PASS }}
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
-          # 这里判断：如果是 2点 触发的，执行签到；否则执行转盘
-          TASK_TYPE: ${{ github.event.schedule == '0 2 * * *' && 'checkin' || 'wheel' }}
         run: python main.py
