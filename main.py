@@ -49,31 +49,20 @@ def send_email(subject, body, image_path=None):
 def task_bomtoon_tw(page):
     print("\n========== 🚀 [Bomtoon TW] 开始执行 ==========")
     try:
-        print("[TW] 正在打开登录页面...")
         page.goto("https://www.bomtoon.tw/user/login", timeout=60000)
         page.wait_for_timeout(3000)
-
-        print("[TW] 正在输入账号密码...")
         page.fill('input[placeholder="請輸入電子信箱"]', BOMTOON_USER)
         page.fill('input[type="password"]', BOMTOON_PASS)
-
-        print("[TW] 点击登录按钮...")
         try:
             page.get_by_role("button", name="登入").click(timeout=10000)
         except Exception:
             page.press('input[type="password"]', 'Enter')
-
         page.wait_for_timeout(5000)
-        print("[TW] 登录动作完成，准备前往活动页面...")
 
         page.goto("https://www.bomtoon.tw/play", timeout=60000)
         page.wait_for_timeout(5000)
 
-        if "user/login" in page.url:
-            print("⚠️ [TW] 警告：好像还停留在登录页面，登录可能失败了！")
-            return
-
-        # --- 执行签到 ---
+        # 签到
         print("[TW] 开始检查每日签到...")
         try:
             check_btn = page.get_by_role("button", name="CHECK")
@@ -88,69 +77,70 @@ def task_bomtoon_tw(page):
         except Exception as e:
             print(f"❌ [TW] 签到出错: {e}")
 
-        # --- 执行转盘 ---
+        # 转盘
         print("[TW] 开始检查 Lucky 大转盘...")
         try:
             start_btn = page.get_by_role("button", name="START")
             if start_btn.is_visible() and start_btn.is_enabled():
                 start_btn.click(timeout=10000)
-                print("[TW] 已点击转盘，等待动画...")
                 page.wait_for_timeout(10000)
                 page.screenshot(path="tw_wheel_result.png", full_page=True)
                 print("✅ [TW] 转盘抽奖完成！")
                 send_email("[Bomtoon TW] 大转盘抽奖结果", "转盘已触发，请查看附图。", "tw_wheel_result.png")
             else:
-                print("⚠️ [TW] 转盘 START 按钮不可用，可能未到冷却时间。")
+                print("⚠️ [TW] 转盘 START 按钮不可用。")
         except Exception as e:
             print(f"❌ [TW] 转盘出错: {e}")
 
     except Exception as e:
         print(f"❌ [TW] 执行异常: {e}")
-        page.screenshot(path="tw_error.png", full_page=True)
 
 
 # ================= 平台 2：Bomtoon 国际版 =================
 def task_bomtoon_com(page):
     print("\n========== 🚀 [Bomtoon COM] 开始执行 ==========")
     if not all([BOMTOON_COM_USER, BOMTOON_COM_PASS]):
-        print("⚠️ [COM] 未配置 BOMTOON_COM_USER 或 BOMTOON_COM_PASS，跳过。")
+        print("⚠️ [COM] 未配置账号密码，跳过。")
         return
 
     try:
-        print("[COM] 正在打开登录页面...")
         page.goto("https://www.bomtoon.com/user/login", timeout=60000)
         page.wait_for_timeout(3000)
-
-        print("[COM] 正在输入账号密码...")
         page.fill('input[placeholder="이메일을 입력해주세요."]', BOMTOON_COM_USER)
         page.fill('input[type="password"]', BOMTOON_COM_PASS)
-
-        print("[COM] 点击登录按钮...")
         try:
             page.locator('button:has-text("로그인")').first.click(timeout=10000)
         except Exception:
             page.press('input[type="password"]', 'Enter')
-
         page.wait_for_timeout(5000)
-        print("[COM] 登录动作完成，准备前往活动页面...")
 
         page.goto("https://www.bomtoon.com/play", timeout=60000)
         page.wait_for_timeout(5000)
 
         if "user/login" in page.url:
-            print("⚠️ [COM] 警告：好像还停留在登录页面，登录可能失败了！")
+            print("⚠️ [COM] 登录失败，跳过。")
             return
 
-        # --- 执行签到 ---
+        # --- 执行签到 (加入了防误判逻辑) ---
         print("[COM] 开始检查每日签到...")
         try:
+            # 检查按钮文本是否变成了表示“已签到”的词
+            # 很多韩国网站签完后按钮会变成 "출석완료" (签到完成)
             check_btn = page.locator('button:has-text("CHECK"), button:has-text("출석체크")').first
+            
             if check_btn.is_visible() and check_btn.is_enabled():
+                # 先截个图，记录点击前的状态
                 check_btn.click(timeout=10000)
-                page.wait_for_timeout(3000)
+                page.wait_for_timeout(3000) # 等待弹窗出现
                 page.screenshot(path="com_checkin_result.png", full_page=True)
-                print("✅ [COM] 签到成功！")
-                send_email("[Bomtoon COM] 每日签到成功", "签到完成，详情见附图。", "com_checkin_result.png")
+                
+                # 点击后，检查页面上是否出现了“已完成”或者“已签到”的字眼
+                page_content = page.content()
+                if any(word in page_content for word in ["이미 출석", "출석 완료", "이미 완료", "Already checked", "已完成"]):
+                    print("⚠️ [COM] 点击了签到，但网页提示今天已经签过了，取消发邮件。")
+                else:
+                    print("✅ [COM] 签到成功！")
+                    send_email("[Bomtoon COM] 每日签到成功", "签到完成，详情见附图。", "com_checkin_result.png")
             else:
                 print("⚠️ [COM] 签到按钮不可用，可能今天已签到。")
         except Exception as e:
@@ -162,22 +152,19 @@ def task_bomtoon_com(page):
             start_btn = page.locator('button:has-text("START")').first
             if start_btn.is_visible() and start_btn.is_enabled():
                 start_btn.click(timeout=10000)
-                print("[COM] 已点击转盘，等待动画...")
                 page.wait_for_timeout(10000)
                 page.screenshot(path="com_wheel_result.png", full_page=True)
                 print("✅ [COM] 转盘抽奖完成！")
                 send_email("[Bomtoon COM] 大转盘抽奖结果", "转盘已触发，请查看附图。", "com_wheel_result.png")
             else:
-                print("⚠️ [COM] 转盘 START 按钮不可用，可能未到冷却时间。")
+                print("⚠️ [COM] 转盘 START 按钮不可用。")
         except Exception as e:
             print(f"❌ [COM] 转盘出错: {e}")
 
     except Exception as e:
         print(f"❌ [COM] 执行异常: {e}")
-        page.screenshot(path="com_error.png", full_page=True)
 
 
-# ================= 主控函数 =================
 def main():
     with sync_playwright() as p:
         print("🚀 启动浏览器...")
@@ -187,12 +174,10 @@ def main():
             viewport={"width": 1280, "height": 800}
         )
 
-        # 执行台湾版任务
         page_tw = context.new_page()
         task_bomtoon_tw(page_tw)
         page_tw.close()
 
-        # 执行国际版任务
         page_com = context.new_page()
         task_bomtoon_com(page_com)
         page_com.close()
