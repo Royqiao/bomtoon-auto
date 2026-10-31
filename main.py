@@ -116,4 +116,5 @@ def main():
             browser.close()
 
 if __name__ == "__main__":
+    send_email("测试邮件", "这是一封来自 GitHub Actions 的测试邮件")
     main()
