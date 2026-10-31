@@ -8,10 +8,9 @@ from playwright.sync_api import sync_playwright
 
 BOMTOON_USER = os.environ.get("BOMTOON_USER")
 BOMTOON_PASS = os.environ.get("BOMTOON_PASS")
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
-SENDER_PASS = os.environ.get("SENDER_PASS")
-RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL")
-ENV_TASK_TYPE = os.environ.get("TASK_TYPE", "").strip().lower()
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "").strip()
+SENDER_PASS = os.environ.get("SENDER_PASS", "").strip()
+RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL", "").strip()
 
 
 def send_email(subject, body, image_path=None):
@@ -47,20 +46,27 @@ def send_email(subject, body, image_path=None):
 
         print("正在连接 QQ SMTP 服务器...")
 
-        with smtplib.SMTP_SSL(
-            "smtp.qq.com", 465, timeout=20
-        ) as server:
+      with smtplib.SMTP("smtp.qq.com", 587, timeout=20) as server:
+    server.ehlo()
+    server.starttls()
+    server.ehlo()
 
-            print("SMTP 连接成功，正在登录...")
-            server.login(SENDER_EMAIL, SENDER_PASS)
+    print("STARTTLS 加密连接成功，正在登录...")
 
-            print("登录成功，正在发送邮件...")
+    server.login(
+        SENDER_EMAIL.strip(),
+        SENDER_PASS.strip()
+    )
 
-            result = server.sendmail(
-                SENDER_EMAIL,
-                [RECEIVER_EMAIL],
-                msg.as_string()
-            )
+    print("QQ 邮箱登录成功，正在发送...")
+
+    server.sendmail(
+        SENDER_EMAIL.strip(),
+        [RECEIVER_EMAIL.strip()],
+        msg.as_string()
+    )
+
+print("邮件发送成功！")
 
             if result:
                 print(f"⚠️ 部分收件人发送失败: {result}")
