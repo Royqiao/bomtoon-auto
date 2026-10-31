@@ -13,19 +13,12 @@ SENDER_PASS = os.environ.get("SENDER_PASS", "").strip()
 RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL", "").strip()
 
 
+
 def send_email(subject, body, image_path=None):
     import traceback
 
-    required = {
-        "SENDER_EMAIL": SENDER_EMAIL,
-        "SENDER_PASS": SENDER_PASS,
-        "RECEIVER_EMAIL": RECEIVER_EMAIL
-    }
-
-    missing = [k for k, v in required.items() if not v]
-
-    if missing:
-        print(f"❌ 邮件配置缺失: {', '.join(missing)}")
+    if not all([SENDER_EMAIL, SENDER_PASS, RECEIVER_EMAIL]):
+        print("邮件配置不完整，跳过发送。")
         return False
 
     try:
@@ -46,39 +39,38 @@ def send_email(subject, body, image_path=None):
 
         print("正在连接 QQ SMTP 服务器...")
 
-      with smtplib.SMTP("smtp.qq.com", 587, timeout=20) as server:
-    server.ehlo()
-    server.starttls()
-    server.ehlo()
+        with smtplib.SMTP("smtp.qq.com", 587, timeout=20) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
 
-    print("STARTTLS 加密连接成功，正在登录...")
+            print("SMTP 加密连接成功，正在登录...")
 
-    server.login(
-        SENDER_EMAIL.strip(),
-        SENDER_PASS.strip()
-    )
+            server.login(
+                SENDER_EMAIL.strip(),
+                SENDER_PASS.strip()
+            )
 
-    print("QQ 邮箱登录成功，正在发送...")
+            print("QQ 邮箱登录成功，正在发送邮件...")
 
-    server.sendmail(
-        SENDER_EMAIL.strip(),
-        [RECEIVER_EMAIL.strip()],
-        msg.as_string()
-    )
-
-print("邮件发送成功！")
+            result = server.sendmail(
+                SENDER_EMAIL.strip(),
+                [RECEIVER_EMAIL.strip()],
+                msg.as_string()
+            )
 
             if result:
-                print(f"⚠️ 部分收件人发送失败: {result}")
+                print(f"部分收件人发送失败：{result}")
                 return False
 
-        print(f"✅ 邮件发送成功: {subject}")
+        print(f"邮件发送成功：{subject}")
         return True
 
     except Exception as e:
-        print(f"❌ 邮件发送失败: {type(e).__name__}: {e}")
+        print(f"邮件发送失败：{type(e).__name__}: {e}")
         traceback.print_exc()
         return False
+
 
 
 def main():
