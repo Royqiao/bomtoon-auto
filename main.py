@@ -8,9 +8,12 @@ from playwright.sync_api import sync_playwright
 
 BOMTOON_USER = os.environ.get("BOMTOON_USER")
 BOMTOON_PASS = os.environ.get("BOMTOON_PASS")
+
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "").strip()
 SENDER_PASS = os.environ.get("SENDER_PASS", "").strip()
 RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL", "").strip()
+
+ENV_TASK_TYPE = os.environ.get("TASK_TYPE", "").strip().lower()
 
 
 
@@ -46,10 +49,20 @@ def send_email(subject, body, image_path=None):
 
             print("SMTP 加密连接成功，正在登录...")
 
-            server.login(
-                SENDER_EMAIL.strip(),
-                SENDER_PASS.strip()
-            )
+           print("正在检查 SMTP 服务器认证能力...")
+
+code, response = server.ehlo()
+print("EHLO 状态码：", code)
+print("服务器认证信息：", response)
+
+print("开始 SMTP 登录...")
+
+server.login(
+    SENDER_EMAIL.strip(),
+    SENDER_PASS.strip()
+)
+
+print("QQ 邮箱登录成功！")
 
             print("QQ 邮箱登录成功，正在发送邮件...")
 
