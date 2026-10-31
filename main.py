@@ -121,28 +121,23 @@ def task_bomtoon_com(page):
             print("⚠️ [COM] 登录失败，跳过。")
             return
 
-        # --- 执行签到 (加入了防误判逻辑) ---
+        # --- 执行签到 (终极防误判逻辑) ---
         print("[COM] 开始检查每日签到...")
         try:
-            # 检查按钮文本是否变成了表示“已签到”的词
-            # 很多韩国网站签完后按钮会变成 "출석완료" (签到完成)
-            check_btn = page.locator('button:has-text("CHECK"), button:has-text("출석체크")').first
-            
-            if check_btn.is_visible() and check_btn.is_enabled():
-                # 先截个图，记录点击前的状态
-                check_btn.click(timeout=10000)
-                page.wait_for_timeout(3000) # 等待弹窗出现
-                page.screenshot(path="com_checkin_result.png", full_page=True)
-                
-                # 点击后，检查页面上是否出现了“已完成”或者“已签到”的字眼
-                page_content = page.content()
-                if any(word in page_content for word in ["이미 출석", "출석 완료", "이미 완료", "Already checked", "已完成"]):
-                    print("⚠️ [COM] 点击了签到，但网页提示今天已经签过了，取消发邮件。")
-                else:
+            # 1. 先看页面上有没有“明天见”这几个韩文字，如果有，说明今天已经签过了
+            if "내일 또 만나요" in page.content() or "출석체크 하기" in page.content():
+                print("⚠️ [COM] 页面显示已签到（明天见/按钮已灰），跳过签到。")
+            else:
+                # 2. 如果没有，说明还没签，尝试找按钮并点击
+                check_btn = page.locator('button:has-text("CHECK"), button:has-text("출석체크")').first
+                if check_btn.is_visible() and check_btn.is_enabled():
+                    check_btn.click(timeout=10000)
+                    page.wait_for_timeout(3000)
+                    page.screenshot(path="com_checkin_result.png", full_page=True)
                     print("✅ [COM] 签到成功！")
                     send_email("[Bomtoon COM] 每日签到成功", "签到完成，详情见附图。", "com_checkin_result.png")
-            else:
-                print("⚠️ [COM] 签到按钮不可用，可能今天已签到。")
+                else:
+                    print("⚠️ [COM] 未找到可点击的签到按钮。")
         except Exception as e:
             print(f"❌ [COM] 签到出错: {e}")
 
