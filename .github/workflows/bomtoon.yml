@@ -1,9 +1,9 @@
 name: Bomtoon Auto
 on:
-    schedule:
+  schedule:
     # 每日签到（UTC 02:00，北京时间 10:00）
     - cron: '0 2 * * *'
-    # 每12小时转盘一次（UTC 0点和12点，对应北京时间 8点和20点）
+    # 每12小时转盘一次（UTC 0:30 和 12:30，对应北京时间 8:30 和 20:30）
     - cron: '30 */12 * * *'
   workflow_dispatch: # 支持手动触发测试
 
@@ -30,8 +30,6 @@ jobs:
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           SENDER_PASS: ${{ secrets.SENDER_PASS }}
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
-          # 这里通过判断 GitHub Event 来区分执行的是签到还是转盘
-          # 如果你在 Settings -> Variables 中设置 TASK_TYPE 会覆盖下面的逻辑
-          # 简单起见，这里依赖 Python 脚本内部逻辑，或根据时间判断
+          # 这里判断：如果是 2点 触发的，执行签到；否则执行转盘
           TASK_TYPE: ${{ github.event.schedule == '0 2 * * *' && 'checkin' || 'wheel' }}
         run: python main.py
