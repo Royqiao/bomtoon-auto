@@ -1,7 +1,6 @@
 import os
 import time
 import smtplib
-import sys
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
@@ -12,38 +11,35 @@ BOMTOON_PASS = os.environ.get("BOMTOON_PASS")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
 SENDER_PASS = os.environ.get("SENDER_PASS")
 RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL")
-TASK_TYPE = os.environ.get("TASK_TYPE", "").strip().lower()
+ENV_TASK_TYPE = os.environ.get("TASK_TYPE", "").strip().lower()
 
-def send_email(subject, body, image_path=None, retries=3):
+def send_email(subject, body, image_path=None):
     if not all([SENDER_EMAIL, SENDER_PASS, RECEIVER_EMAIL]):
         print("邮件配置不完整，跳过发送。")
         return
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = SENDER_EMAIL
+        msg['To'] = RECEIVER_EMAIL
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
-    for attempt in range(retries):
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = SENDER_EMAIL
-            msg['To'] = RECEIVER_EMAIL
-            msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        if image_path and os.path.exists(image_path):
+            with open(image_path, 'rb') as f:
+                img = MIMEImage(f.read(), name=os.path.basename(image_path))
+                msg.attach(img)
 
-            if image_path and os.path.exists(image_path):
-                with open(image_path, 'rb') as f:
-                    img = MIMEImage(f.read(), name=os.path.basename(image_path))
-                    msg.attach(img)
-
-            with smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=15) as server:
-                server.login(SENDER_EMAIL, SENDER_PASS)
-                server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
-            print(f"✅ 邮件发送成功: {subject}")
-            return
-        except Exception as e:
-            print(f"❌ 第 {attempt + 1} 次邮件发送失败: {e}")
-            if attempt < retries - 1:
-                time.sleep(3)
-    print("❌ 邮件发送最终失败。")
+        with smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=10) as server:
+            server.login(SENDER_EMAIL, SENDER_PASS)
+            server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
+        print(f"✅ 邮件发送成功: {subject}")
+    except Exception as e:
+        print(f"❌ 邮件发送失败 (忽略此错误继续): {e}")
 
 def main():
+    # 解决变量作用域问题
+    current_task = ENV_TASK_TYPE if ENV_TASK_TYPE else "all"
+
     with sync_playwright() as p:
         print("🚀 启动浏览器...")
         browser = p.chromium.launch(headless=True)
@@ -64,11 +60,9 @@ def main():
 
             print("点击登录按钮...")
             try:
-                # 精确打击：找 role 为 button 且名字是“登入”的元素
                 page.get_by_role("button", name="登入").click(timeout=10000)
             except Exception as e:
-                print(f"尝试点击按钮失败，改用回车键提交: {e}")
-                # 备用方案：直接在密码框里按回车键
+                print(f"点击按钮失败，尝试回车键: {e}")
                 page.press('input[type="password"]', 'Enter')
 
             page.wait_for_timeout(5000)
@@ -77,17 +71,12 @@ def main():
             page.goto("https://www.bomtoon.tw/play", timeout=60000)
             page.wait_for_timeout(5000)
 
-            # 判断是否真的登录成功了
             if "user/login" in page.url:
                 print("⚠️ 警告：好像还停留在登录页面，登录可能失败了！")
-                page.screenshot(path="login_fail.png", full_page=True)
-                send_email("[Bomtoon] 登录失败", "脚本未能成功登录，请查看截图。", "login_fail.png")
                 return
 
-            if not TASK_TYPE:
-                TASK_TYPE = "all"
-
-            if TASK_TYPE in ["checkin", "all"]:
+            # --- 执行签到 ---
+            if current_task in ["checkin", "all"]:
                 print("开始执行每日签到...")
                 try:
                     check_btn = page.get_by_role("button", name="CHECK")
@@ -95,13 +84,15 @@ def main():
                         check_btn.click(timeout=10000)
                         page.wait_for_timeout(3000)
                         page.screenshot(path="checkin_result.png", full_page=True)
+                        print("✅ 签到成功！")
                         send_email("[Bomtoon] 每日签到成功", "签到完成，详情见附图。", "checkin_result.png")
                     else:
                         print("⚠️ 签到按钮不可用，可能今天已签到。")
                 except Exception as e:
                     print(f"签到出错: {e}")
 
-            if TASK_TYPE in ["wheel", "all"]:
+            # --- 执行转盘 ---
+            if current_task in ["wheel", "all"]:
                 print("开始执行 Lucky 大转盘...")
                 try:
                     start_btn = page.get_by_role("button", name="START")
@@ -110,16 +101,17 @@ def main():
                         print("已点击转盘，等待动画...")
                         page.wait_for_timeout(8000)
                         page.screenshot(path="wheel_result.png", full_page=True)
+                        print("✅ 转盘抽奖完成！")
                         send_email("[Bomtoon] 大转盘抽奖结果", "转盘已触发，请查看附图。", "wheel_result.png")
                     else:
-                        print("⚠️ 转盘 START 按钮不可用。")
+                        print("⚠️ 转盘 START 按钮不可用，可能未到冷却时间。")
                 except Exception as e:
                     print(f"转盘出错: {e}")
 
         except Exception as e:
             print(f"❌ 执行异常: {e}")
             page.screenshot(path="error.png", full_page=True)
-            send_email("[Bomtoon] 任务执行异常", f"错误信息: {e}", "error.png")
+            # 遇到异常不再强行发邮件了，免得刷屏报错
         finally:
             browser.close()
 
