@@ -1,0 +1,37 @@
+name: Bomtoon Auto
+on:
+  schedule:
+    # 每日签到（UTC 02:00，北京时间 10:00）
+    - cron: '0 2 * * *'
+    # 每5小时转盘一次（UTC 0,5,10,15,20）
+    - cron: '0 */5 * * *'
+  workflow_dispatch: # 支持手动触发测试
+
+jobs:
+  bomtoon-task:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+          
+      - name: Run Bomtoon Task
+        env:
+          BOMTOON_USER: ${{ secrets.BOMTOON_USER }}
+          BOMTOON_PASS: ${{ secrets.BOMTOON_PASS }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_PASS: ${{ secrets.SENDER_PASS }}
+          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+          # 这里通过判断 GitHub Event 来区分执行的是签到还是转盘
+          # 如果你在 Settings -> Variables 中设置 TASK_TYPE 会覆盖下面的逻辑
+          # 简单起见，这里依赖 Python 脚本内部逻辑，或根据时间判断
+          TASK_TYPE: ${{ github.event.schedule == '0 2 * * *' && 'checkin' || 'wheel' }}
+        run: python main.py
