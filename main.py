@@ -161,7 +161,12 @@ def main():
             browser.close()
 
 if __name__ == "__main__":
-    send_email(
-        "QQ邮箱SMTP测试",
-        "如果收到这封邮件，说明GitHub Actions邮件发送功能正常。"
-    )
+    try:
+        send_email(
+            "测试邮件",
+            "这是一封来自 GitHub Actions 的测试邮件"
+        )
+    except Exception as e:
+        print(f"测试邮件异常：{type(e).__name__}: {e}")
+
+    main()
