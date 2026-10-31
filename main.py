@@ -13,28 +13,67 @@ SENDER_PASS = os.environ.get("SENDER_PASS")
 RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL")
 ENV_TASK_TYPE = os.environ.get("TASK_TYPE", "").strip().lower()
 
+
 def send_email(subject, body, image_path=None):
-    if not all([SENDER_EMAIL, SENDER_PASS, RECEIVER_EMAIL]):
-        print("邮件配置不完整，跳过发送。")
-        return
+    import traceback
+
+    required = {
+        "SENDER_EMAIL": SENDER_EMAIL,
+        "SENDER_PASS": SENDER_PASS,
+        "RECEIVER_EMAIL": RECEIVER_EMAIL
+    }
+
+    missing = [k for k, v in required.items() if not v]
+
+    if missing:
+        print(f"❌ 邮件配置缺失: {', '.join(missing)}")
+        return False
+
     try:
         msg = MIMEMultipart()
         msg['From'] = SENDER_EMAIL
         msg['To'] = RECEIVER_EMAIL
         msg['Subject'] = subject
+
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
         if image_path and os.path.exists(image_path):
             with open(image_path, 'rb') as f:
-                img = MIMEImage(f.read(), name=os.path.basename(image_path))
+                img = MIMEImage(
+                    f.read(),
+                    name=os.path.basename(image_path)
+                )
                 msg.attach(img)
 
-        with smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=10) as server:
+        print("正在连接 QQ SMTP 服务器...")
+
+        with smtplib.SMTP_SSL(
+            "smtp.qq.com", 465, timeout=20
+        ) as server:
+
+            print("SMTP 连接成功，正在登录...")
             server.login(SENDER_EMAIL, SENDER_PASS)
-            server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
+
+            print("登录成功，正在发送邮件...")
+
+            result = server.sendmail(
+                SENDER_EMAIL,
+                [RECEIVER_EMAIL],
+                msg.as_string()
+            )
+
+            if result:
+                print(f"⚠️ 部分收件人发送失败: {result}")
+                return False
+
         print(f"✅ 邮件发送成功: {subject}")
+        return True
+
     except Exception as e:
-        print(f"❌ 邮件发送失败 (忽略此错误继续): {e}")
+        print(f"❌ 邮件发送失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        return False
+
 
 def main():
     # 解决变量作用域问题
@@ -116,5 +155,7 @@ def main():
             browser.close()
 
 if __name__ == "__main__":
-    send_email("测试邮件", "这是一封来自 GitHub Actions 的测试邮件")
-    main()
+    send_email(
+        "QQ邮箱SMTP测试",
+        "如果收到这封邮件，说明GitHub Actions邮件发送功能正常。"
+    )
