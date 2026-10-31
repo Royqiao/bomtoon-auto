@@ -30,8 +30,6 @@ def send_email(subject, body, image_path=None):
                 img = MIMEImage(f.read(), name=os.path.basename(image_path))
                 msg.attach(img)
 
-        print("正在尝试发送邮件...")
-        # 使用最稳定的 465 端口，不要用 587
         with smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=15) as server:
             server.login(SENDER_EMAIL, SENDER_PASS)
             server.sendmail(SENDER_EMAIL, [RECEIVER_EMAIL], msg.as_string())
@@ -103,11 +101,28 @@ def main():
                     start_btn = page.get_by_role("button", name="START")
                     if start_btn.is_visible() and start_btn.is_enabled():
                         start_btn.click(timeout=10000)
-                        print("已点击转盘，等待动画...")
-                        page.wait_for_timeout(8000)
+                        print("已点击转盘，等待动画结束...")
+                        
+                        # 等待 10 秒，确保转盘停下并弹出奖励窗口
+                        page.wait_for_timeout(10000) 
                         page.screenshot(path="wheel_result.png", full_page=True)
-                        print("✅ 转盘抽奖完成！")
-                        send_email("[Bomtoon] 大转盘抽奖结果", "转盘已触发，请查看附图。", "wheel_result.png")
+                        
+                        # 尝试抓取奖励文本（利用常见的弹窗特征）
+                        reward_text = "转盘已触发，具体奖励请查看邮件附带的网页截图。"
+                        try:
+                            # 尝试寻找包含“恭喜”、“獲得”等字样的弹窗或提示
+                            # 这里使用简单的通用选择器，如果不成功会自动跳过
+                            popup = page.locator("div[class*='modal'], div[class*='popup'], div[class*='toast']").first
+                            if popup.is_visible():
+                                text = popup.inner_text().replace("\n", " ")
+                                if text.strip():
+                                    reward_text = f"页面提示信息：{text}"
+                        except:
+                            pass
+                        
+                        print(f"✅ 转盘抽奖完成！抓取结果: {reward_text}")
+                        # 将抽奖结果和截图发送到邮箱
+                        send_email("[Bomtoon] 大转盘抽奖结果", f"抽奖结果：\n{reward_text}\n\n详情请查看附图。", "wheel_result.png")
                     else:
                         print("⚠️ 转盘 START 按钮不可用，可能未到冷却时间。")
                 except Exception as e:
@@ -120,8 +135,4 @@ def main():
             browser.close()
 
 if __name__ == "__main__":
-    # 强制发一封测试邮件，验证邮箱能否连通
-    print("=== 开始测试邮件发送 ===")
-    send_email("测试邮件", "这是一封来自 GitHub Actions 的测试邮件")
-    print("=== 测试结束，开始执行主任务 ===")
     main()
