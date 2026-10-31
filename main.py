@@ -6,88 +6,43 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 from playwright.sync_api import sync_playwright
 
+# 读取配置
 BOMTOON_USER = os.environ.get("BOMTOON_USER")
 BOMTOON_PASS = os.environ.get("BOMTOON_PASS")
-
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "").strip()
 SENDER_PASS = os.environ.get("SENDER_PASS", "").strip()
 RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL", "").strip()
-
 ENV_TASK_TYPE = os.environ.get("TASK_TYPE", "").strip().lower()
 
-
-
 def send_email(subject, body, image_path=None):
-    import traceback
-
     if not all([SENDER_EMAIL, SENDER_PASS, RECEIVER_EMAIL]):
         print("邮件配置不完整，跳过发送。")
         return False
-
     try:
         msg = MIMEMultipart()
         msg['From'] = SENDER_EMAIL
         msg['To'] = RECEIVER_EMAIL
         msg['Subject'] = subject
-
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
         if image_path and os.path.exists(image_path):
             with open(image_path, 'rb') as f:
-                img = MIMEImage(
-                    f.read(),
-                    name=os.path.basename(image_path)
-                )
+                img = MIMEImage(f.read(), name=os.path.basename(image_path))
                 msg.attach(img)
 
-        print("正在连接 QQ SMTP 服务器...")
-
-        with smtplib.SMTP("smtp.qq.com", 587, timeout=20) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-
-            print("SMTP 加密连接成功，正在登录...")
-
-           print("正在检查 SMTP 服务器认证能力...")
-
-code, response = server.ehlo()
-print("EHLO 状态码：", code)
-print("服务器认证信息：", response)
-
-print("开始 SMTP 登录...")
-
-server.login(
-    SENDER_EMAIL.strip(),
-    SENDER_PASS.strip()
-)
-
-print("QQ 邮箱登录成功！")
-
-            print("QQ 邮箱登录成功，正在发送邮件...")
-
-            result = server.sendmail(
-                SENDER_EMAIL.strip(),
-                [RECEIVER_EMAIL.strip()],
-                msg.as_string()
-            )
-
-            if result:
-                print(f"部分收件人发送失败：{result}")
-                return False
-
-        print(f"邮件发送成功：{subject}")
+        print("正在尝试发送邮件...")
+        # 使用最稳定的 465 端口，不要用 587
+        with smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=15) as server:
+            server.login(SENDER_EMAIL, SENDER_PASS)
+            server.sendmail(SENDER_EMAIL, [RECEIVER_EMAIL], msg.as_string())
+            
+        print(f"✅ 邮件发送成功：{subject}")
         return True
-
     except Exception as e:
-        print(f"邮件发送失败：{type(e).__name__}: {e}")
-        traceback.print_exc()
+        print(f"❌ 邮件发送失败：{type(e).__name__}: {e}")
         return False
 
-
-
 def main():
-    # 解决变量作用域问题
     current_task = ENV_TASK_TYPE if ENV_TASK_TYPE else "all"
 
     with sync_playwright() as p:
@@ -161,17 +116,12 @@ def main():
         except Exception as e:
             print(f"❌ 执行异常: {e}")
             page.screenshot(path="error.png", full_page=True)
-            # 遇到异常不再强行发邮件了，免得刷屏报错
         finally:
             browser.close()
 
 if __name__ == "__main__":
-    try:
-        send_email(
-            "测试邮件",
-            "这是一封来自 GitHub Actions 的测试邮件"
-        )
-    except Exception as e:
-        print(f"测试邮件异常：{type(e).__name__}: {e}")
-
+    # 强制发一封测试邮件，验证邮箱能否连通
+    print("=== 开始测试邮件发送 ===")
+    send_email("测试邮件", "这是一封来自 GitHub Actions 的测试邮件")
+    print("=== 测试结束，开始执行主任务 ===")
     main()
