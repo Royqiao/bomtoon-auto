@@ -1,5 +1,6 @@
 import os
 import time
+import re  # 引入正则表达式，用于提取数字
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -60,7 +61,7 @@ def task_bomtoon_tw(page):
         page.wait_for_timeout(5000)
 
         page.goto("https://www.bomtoon.tw/play", timeout=60000)
-        page.wait_for_timeout(5000)
+        page.wait_for_timeout(8000)
 
         # 签到
         print("[TW] 开始检查每日签到...")
@@ -73,24 +74,55 @@ def task_bomtoon_tw(page):
                 print("✅ [TW] 签到成功！")
                 send_email("[Bomtoon TW] 每日签到成功", "签到完成，详情见附图。", "tw_checkin_result.png")
             else:
-                print("⚠️ [TW] 签到按钮不可用，可能今天已签到。")
+                print("⚠️ [TW] 签到按钮不可用（已签到）。")
         except Exception as e:
             print(f"❌ [TW] 签到出错: {e}")
 
-        # 转盘
+        # --- 执行转盘 ---
         print("[TW] 开始检查 Lucky 大转盘...")
-        try:
-            start_btn = page.get_by_role("button", name="START")
-            if start_btn.is_visible() and start_btn.is_enabled():
-                start_btn.click(timeout=10000)
-                page.wait_for_timeout(10000)
-                page.screenshot(path="tw_wheel_result.png", full_page=True)
-                print("✅ [TW] 转盘抽奖完成！")
-                send_email("[Bomtoon TW] 大转盘抽奖结果", "转盘已触发，请查看附图。", "tw_wheel_result.png")
-            else:
-                print("⚠️ [TW] 转盘 START 按钮不可用。")
-        except Exception as e:
-            print(f"❌ [TW] 转盘出错: {e}")
+        for i in range(5):
+            try:
+                chance_text = page.locator("text=轉盤機會").first.inner_text(timeout=5000)
+                print(f"[TW] 当前状态: {chance_text}")
+                match = re.search(r'(\d+)', chance_text)
+                chances = int(match.group(1)) if match else 1
+                
+                if chances <= 0:
+                    print("⚠️ [TW] 没有转盘次数了，结束抽奖。")
+                    break
+
+                print(f"[TW] 剩余 {chances} 次机会，点击参与...")
+                join_btn = page.get_by_role("button", name="START").first
+                if join_btn.is_visible() and join_btn.is_enabled():
+                    join_btn.click(timeout=10000)
+                    page.wait_for_timeout(3000)
+                else:
+                    print("⚠️ [TW] 下方参与按钮不可用。")
+                    break
+
+                print("[TW] 点击中间按钮开始旋转...")
+                spin_img = page.locator('img[src="/images/play/btn-start.png"]').first
+                if spin_img.is_visible():
+                    spin_img.click(timeout=10000)
+                else:
+                    page.locator('div:has-text("START")').last.click(timeout=10000)
+
+                print("[TW] 旋转中，等待动画结束...")
+                page.wait_for_timeout(12000)
+                
+                result_path = f"tw_wheel_result_{i+1}.png"
+                page.screenshot(path=result_path, full_page=True)
+                print(f"✅ [TW] 第 {i+1} 次转盘抽奖完成！")
+                send_email(f"[Bomtoon TW] 第 {i+1} 次转盘抽奖", "转盘已触发，请查看附图。", result_path)
+                
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(2000)
+                page.reload()
+                page.wait_for_timeout(5000)
+
+            except Exception as e:
+                print(f"❌ [TW] 转盘出错（可能次数已用完或网络慢）: {e}")
+                break
 
     except Exception as e:
         print(f"❌ [TW] 执行异常: {e}")
@@ -115,46 +147,82 @@ def task_bomtoon_com(page):
         page.wait_for_timeout(5000)
 
         page.goto("https://www.bomtoon.com/play", timeout=60000)
-        page.wait_for_timeout(5000)
+        page.wait_for_timeout(8000)
 
         if "user/login" in page.url:
             print("⚠️ [COM] 登录失败，跳过。")
             return
 
-        # --- 执行签到 (终极防误判逻辑) ---
+        # --- 执行签到 ---
         print("[COM] 开始检查每日签到...")
         try:
-            # 1. 先看页面上有没有“明天见”这几个韩文字，如果有，说明今天已经签过了
-            if "내일 또 만나요" in page.content() or "출석체크 하기" in page.content():
-                print("⚠️ [COM] 页面显示已签到（明天见/按钮已灰），跳过签到。")
+            is_already_checked = page.locator("text=내일 또 만나요").is_visible()
+            if is_already_checked:
+                print("⚠️ [COM] 视觉确认：页面显示已签到，跳过。")
             else:
-                # 2. 如果没有，说明还没签，尝试找按钮并点击
-                check_btn = page.locator('button:has-text("CHECK"), button:has-text("출석체크")').first
-                if check_btn.is_visible() and check_btn.is_enabled():
+                # 使用你截图中的精准韩文文本
+                check_btn = page.locator('button:has-text("출석체크 하기")').first
+                if check_btn.is_visible():
                     check_btn.click(timeout=10000)
                     page.wait_for_timeout(3000)
                     page.screenshot(path="com_checkin_result.png", full_page=True)
-                    print("✅ [COM] 签到成功！")
-                    send_email("[Bomtoon COM] 每日签到成功", "签到完成，详情见附图。", "com_checkin_result.png")
+                    print("✅ [COM] 执行了签到点击！")
+                    send_email("[Bomtoon COM] 每日签到操作", "已执行签到，详情见附图。", "com_checkin_result.png")
                 else:
-                    print("⚠️ [COM] 未找到可点击的签到按钮。")
+                    print("⚠️ [COM] 找不到签到按钮。")
         except Exception as e:
             print(f"❌ [COM] 签到出错: {e}")
 
         # --- 执行转盘 ---
         print("[COM] 开始检查 Lucky 大转盘...")
-        try:
-            start_btn = page.locator('button:has-text("START")').first
-            if start_btn.is_visible() and start_btn.is_enabled():
-                start_btn.click(timeout=10000)
-                page.wait_for_timeout(10000)
-                page.screenshot(path="com_wheel_result.png", full_page=True)
-                print("✅ [COM] 转盘抽奖完成！")
-                send_email("[Bomtoon COM] 大转盘抽奖结果", "转盘已触发，请查看附图。", "com_wheel_result.png")
-            else:
-                print("⚠️ [COM] 转盘 START 按钮不可用。")
-        except Exception as e:
-            print(f"❌ [COM] 转盘出错: {e}")
+        for i in range(10): # 最多循环10次，COM券可能较多
+            try:
+                # 提取转盘券数量 (룰렛 티켓 X회)
+                chance_text = page.locator("text=룰렛 티켓").first.inner_text(timeout=5000)
+                print(f"[COM] 当前状态: {chance_text}")
+                match = re.search(r'(\d+)', chance_text)
+                chances = int(match.group(1)) if match else 1
+                
+                if chances <= 0:
+                    print("⚠️ [COM] 没有转盘次数了，结束抽奖。")
+                    break
+
+                # 点击外部参与按钮 (룰렛 돌리기)
+                print(f"[COM] 剩余 {chances} 次机会，点击参与...")
+                join_btn = page.locator('button:has-text("룰렛 돌리기")').first
+                if join_btn.is_visible() and join_btn.is_enabled():
+                    join_btn.click(timeout=10000)
+                    page.wait_for_timeout(3000) # 等待弹窗弹出
+                else:
+                    print("⚠️ [COM] 外部转盘参与按钮不可用。")
+                    break
+
+                # 点击内部 START 图片按钮开始旋转
+                print("[COM] 点击中间按钮开始旋转...")
+                spin_img = page.locator('img[src="/images/play/btn-start.png"]').first
+                if spin_img.is_visible():
+                    spin_img.click(timeout=10000)
+                else:
+                    # 备用方案：找包含 START 文本的元素
+                    page.locator('div:has-text("START")').last.click(timeout=10000)
+
+                print("[COM] 旋转中，等待动画结束...")
+                page.wait_for_timeout(12000)
+                
+                result_path = f"com_wheel_result_{i+1}.png"
+                page.screenshot(path=result_path, full_page=True)
+                print(f"✅ [COM] 第 {i+1} 次转盘抽奖完成！")
+                send_email(f"[Bomtoon COM] 第 {i+1} 次转盘抽奖", "转盘已触发，请查看附图。", result_path)
+                
+                # 尝试关闭弹窗并刷新页面重置状态
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(2000)
+                page.reload()
+                page.wait_for_timeout(5000)
+
+            except Exception as e:
+                print(f"❌ [COM] 转盘出错（可能次数已用完或网络慢）: {e}")
+                break
 
     except Exception as e:
         print(f"❌ [COM] 执行异常: {e}")
