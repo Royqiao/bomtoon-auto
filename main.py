@@ -17,7 +17,6 @@ SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "").strip()
 SENDER_PASS = os.environ.get("SENDER_PASS", "").strip()
 RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL", "").strip()
 
-
 # ================= 邮件发送工具函数 =================
 def send_email(subject, body, image_path=None):
     if not all([SENDER_EMAIL, SENDER_PASS, RECEIVER_EMAIL]):
@@ -45,7 +44,6 @@ def send_email(subject, body, image_path=None):
         print(f"❌ 邮件发送失败：{type(e).__name__}: {e}")
         return False
 
-
 # ================= 平台 1：Bomtoon 台湾版 =================
 def task_bomtoon_tw(page):
     print("\n========== 🚀 [Bomtoon TW] 开始执行 ==========")
@@ -63,7 +61,7 @@ def task_bomtoon_tw(page):
         page.goto("https://www.bomtoon.tw/play", timeout=60000)
         page.wait_for_timeout(8000)
 
-        # 签到
+        # --- 签到 ---
         print("[TW] 开始检查每日签到...")
         try:
             check_btn = page.get_by_role("button", name="CHECK")
@@ -82,7 +80,6 @@ def task_bomtoon_tw(page):
         print("[TW] 开始检查 Lucky 大转盘...")
         for i in range(5):
             try:
-                # 加上 try-except，如果找不到文本说明次数没了或页面没加载好
                 try:
                     chance_text = page.locator("text=轉盤機會").first.inner_text(timeout=5000)
                     print(f"[TW] 当前状态: {chance_text}")
@@ -100,31 +97,36 @@ def task_bomtoon_tw(page):
                 join_btn = page.get_by_role("button", name="START").first
                 if join_btn.is_visible() and join_btn.is_enabled():
                     join_btn.click(timeout=10000)
-                    page.wait_for_timeout(4000) # 加长等待弹窗时间
+                    page.wait_for_timeout(4000)
                 else:
                     print("⚠️ [TW] 下方参与按钮不可用。")
                     break
 
                 print("[TW] 点击中间按钮开始旋转...")
-                # 使用 force=True 忽略遮挡，确保能点下去
                 try:
                     page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=5000, force=True)
                 except Exception:
-                    print("⚠️ [TW] 找不到图片按钮，尝试点击文字 START...")
                     page.locator('div:has-text("START")').last.click(timeout=5000, force=True)
 
                 print("[TW] 旋转中，等待动画结束...")
-                page.wait_for_timeout(12000)
+                page.wait_for_timeout(12000) # 等待 12 秒
                 
-                result_path = f"tw_wheel_result_{i+1}.png"
-                page.screenshot(path=result_path, full_page=True)
-                print(f"✅ [TW] 第 {i+1} 次转盘抽奖完成！")
-                send_email(f"[Bomtoon TW] 第 {i+1} 次转盘抽奖", "转盘已触发，请查看附图。", result_path)
+                # --- 判断中奖结果 ---
+                page_text = page.locator('body').inner_text()
+                # 匹配包含“點券”且包含“3”的文本
+                if re.search(r'點券\s*3', page_text) or re.search(r'3\s*點券', page_text):
+                    result_path = f"tw_wheel_win_{i+1}.png"
+                    page.screenshot(path=result_path, full_page=True)
+                    print(f"🎉 [TW] 第 {i+1} 次抽到 3 點券！发送邮件。")
+                    send_email(f"[Bomtoon TW] 中奖！抽到 3 點券", "恭喜！转盘抽到了 3 點券，详情见附图。", result_path)
+                else:
+                    print(f"💨 [TW] 第 {i+1} 次未抽到 3 點券，不发邮件。")
                 
+                # 刷新页面准备下一次
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(2000)
                 page.reload()
-                page.wait_for_timeout(8000) # 刷新后等待8秒，确保新页面加载
+                page.wait_for_timeout(8000)
 
             except Exception as e:
                 print(f"❌ [TW] 转盘循环中断: {e}")
@@ -132,7 +134,6 @@ def task_bomtoon_tw(page):
 
     except Exception as e:
         print(f"❌ [TW] 执行异常: {e}")
-
 
 # ================= 平台 2：Bomtoon 国际版 =================
 def task_bomtoon_com(page):
@@ -199,32 +200,36 @@ def task_bomtoon_com(page):
                 join_btn = page.locator('button:has-text("룰렛 돌리기")').first
                 if join_btn.is_visible() and join_btn.is_enabled():
                     join_btn.click(timeout=10000)
-                    print("[COM] 已点击参与，等待弹窗加载...")
-                    page.wait_for_timeout(6000) # 增加到 6 秒，等弹窗和图片彻底加载
+                    page.wait_for_timeout(6000) 
                 else:
                     print("⚠️ [COM] 外部转盘参与按钮不可用。")
                     break
 
                 print("[COM] 点击中间按钮开始旋转...")
-                # 增加 force=True 兜底
                 try:
                     page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=5000, force=True)
                 except Exception:
-                    print("⚠️ [COM] 找不到图片按钮，尝试点击文字 START...")
                     page.locator('div:has-text("START")').last.click(timeout=5000, force=True)
 
                 print("[COM] 旋转中，等待动画结束...")
-                page.wait_for_timeout(12000)
+                page.wait_for_timeout(12000) 
                 
-                result_path = f"com_wheel_result_{i+1}.png"
-                page.screenshot(path=result_path, full_page=True)
-                print(f"✅ [COM] 第 {i+1} 次转盘抽奖完成！")
-                send_email(f"[Bomtoon COM] 第 {i+1} 次转盘抽奖", "转盘已触发，请查看附图。", result_path)
-                
+                # --- 判断中奖结果 ---
+                page_text = page.locator('body').inner_text()
+                # 匹配包含“코인”且包含“3”的文本
+                if re.search(r'코인\s*3', page_text) or re.search(r'3\s*코인', page_text):
+                    result_path = f"com_wheel_win_{i+1}.png"
+                    page.screenshot(path=result_path, full_page=True)
+                    print(f"🎉 [COM] 第 {i+1} 次抽到 3 코인！发送邮件。")
+                    send_email(f"[Bomtoon COM] 中奖！抽到 3 코인", "恭喜！转盘抽到了 3 코인，详情见附图。", result_path)
+                else:
+                    print(f"💨 [COM] 第 {i+1} 次未抽到 3 코인，不发邮件。")
+
+                # 刷新页面准备下一次
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(2000)
                 page.reload()
-                page.wait_for_timeout(8000) # 刷新后等待8秒
+                page.wait_for_timeout(8000)
 
             except Exception as e:
                 print(f"❌ [COM] 转盘循环中断: {e}")
@@ -232,7 +237,6 @@ def task_bomtoon_com(page):
 
     except Exception as e:
         print(f"❌ [COM] 执行异常: {e}")
-
 
 def main():
     with sync_playwright() as p:
