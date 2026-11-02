@@ -1,6 +1,6 @@
 import os
 import time
-import re  # 引入正则表达式，用于提取数字
+import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -82,10 +82,15 @@ def task_bomtoon_tw(page):
         print("[TW] 开始检查 Lucky 大转盘...")
         for i in range(5):
             try:
-                chance_text = page.locator("text=轉盤機會").first.inner_text(timeout=5000)
-                print(f"[TW] 当前状态: {chance_text}")
-                match = re.search(r'(\d+)', chance_text)
-                chances = int(match.group(1)) if match else 1
+                # 加上 try-except，如果找不到文本说明次数没了或页面没加载好
+                try:
+                    chance_text = page.locator("text=轉盤機會").first.inner_text(timeout=5000)
+                    print(f"[TW] 当前状态: {chance_text}")
+                    match = re.search(r'(\d+)', chance_text)
+                    chances = int(match.group(1)) if match else 1
+                except Exception:
+                    print("⚠️ [TW] 未找到次数文本，可能次数已用完，结束抽奖。")
+                    break
                 
                 if chances <= 0:
                     print("⚠️ [TW] 没有转盘次数了，结束抽奖。")
@@ -95,17 +100,18 @@ def task_bomtoon_tw(page):
                 join_btn = page.get_by_role("button", name="START").first
                 if join_btn.is_visible() and join_btn.is_enabled():
                     join_btn.click(timeout=10000)
-                    page.wait_for_timeout(3000)
+                    page.wait_for_timeout(4000) # 加长等待弹窗时间
                 else:
                     print("⚠️ [TW] 下方参与按钮不可用。")
                     break
 
                 print("[TW] 点击中间按钮开始旋转...")
-                spin_img = page.locator('img[src="/images/play/btn-start.png"]').first
-                if spin_img.is_visible():
-                    spin_img.click(timeout=10000)
-                else:
-                    page.locator('div:has-text("START")').last.click(timeout=10000)
+                # 使用 force=True 忽略遮挡，确保能点下去
+                try:
+                    page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=5000, force=True)
+                except Exception:
+                    print("⚠️ [TW] 找不到图片按钮，尝试点击文字 START...")
+                    page.locator('div:has-text("START")').last.click(timeout=5000, force=True)
 
                 print("[TW] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000)
@@ -118,10 +124,10 @@ def task_bomtoon_tw(page):
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(2000)
                 page.reload()
-                page.wait_for_timeout(5000)
+                page.wait_for_timeout(8000) # 刷新后等待8秒，确保新页面加载
 
             except Exception as e:
-                print(f"❌ [TW] 转盘出错（可能次数已用完或网络慢）: {e}")
+                print(f"❌ [TW] 转盘循环中断: {e}")
                 break
 
     except Exception as e:
@@ -160,7 +166,6 @@ def task_bomtoon_com(page):
             if is_already_checked:
                 print("⚠️ [COM] 视觉确认：页面显示已签到，跳过。")
             else:
-                # 使用你截图中的精准韩文文本
                 check_btn = page.locator('button:has-text("출석체크 하기")').first
                 if check_btn.is_visible():
                     check_btn.click(timeout=10000)
@@ -175,36 +180,38 @@ def task_bomtoon_com(page):
 
         # --- 执行转盘 ---
         print("[COM] 开始检查 Lucky 大转盘...")
-        for i in range(10): # 最多循环10次，COM券可能较多
+        for i in range(10):
             try:
-                # 提取转盘券数量 (룰렛 티켓 X회)
-                chance_text = page.locator("text=룰렛 티켓").first.inner_text(timeout=5000)
-                print(f"[COM] 当前状态: {chance_text}")
-                match = re.search(r'(\d+)', chance_text)
-                chances = int(match.group(1)) if match else 1
+                try:
+                    chance_text = page.locator("text=룰렛 티켓").first.inner_text(timeout=5000)
+                    print(f"[COM] 当前状态: {chance_text}")
+                    match = re.search(r'(\d+)', chance_text)
+                    chances = int(match.group(1)) if match else 1
+                except Exception:
+                    print("⚠️ [COM] 未找到次数文本，可能次数已用完，结束抽奖。")
+                    break
                 
                 if chances <= 0:
                     print("⚠️ [COM] 没有转盘次数了，结束抽奖。")
                     break
 
-                # 点击外部参与按钮 (룰렛 돌리기)
                 print(f"[COM] 剩余 {chances} 次机会，点击参与...")
                 join_btn = page.locator('button:has-text("룰렛 돌리기")').first
                 if join_btn.is_visible() and join_btn.is_enabled():
                     join_btn.click(timeout=10000)
-                    page.wait_for_timeout(3000) # 等待弹窗弹出
+                    print("[COM] 已点击参与，等待弹窗加载...")
+                    page.wait_for_timeout(6000) # 增加到 6 秒，等弹窗和图片彻底加载
                 else:
                     print("⚠️ [COM] 外部转盘参与按钮不可用。")
                     break
 
-                # 点击内部 START 图片按钮开始旋转
                 print("[COM] 点击中间按钮开始旋转...")
-                spin_img = page.locator('img[src="/images/play/btn-start.png"]').first
-                if spin_img.is_visible():
-                    spin_img.click(timeout=10000)
-                else:
-                    # 备用方案：找包含 START 文本的元素
-                    page.locator('div:has-text("START")').last.click(timeout=10000)
+                # 增加 force=True 兜底
+                try:
+                    page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=5000, force=True)
+                except Exception:
+                    print("⚠️ [COM] 找不到图片按钮，尝试点击文字 START...")
+                    page.locator('div:has-text("START")').last.click(timeout=5000, force=True)
 
                 print("[COM] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000)
@@ -214,14 +221,13 @@ def task_bomtoon_com(page):
                 print(f"✅ [COM] 第 {i+1} 次转盘抽奖完成！")
                 send_email(f"[Bomtoon COM] 第 {i+1} 次转盘抽奖", "转盘已触发，请查看附图。", result_path)
                 
-                # 尝试关闭弹窗并刷新页面重置状态
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(2000)
                 page.reload()
-                page.wait_for_timeout(5000)
+                page.wait_for_timeout(8000) # 刷新后等待8秒
 
             except Exception as e:
-                print(f"❌ [COM] 转盘出错（可能次数已用完或网络慢）: {e}")
+                print(f"❌ [COM] 转盘循环中断: {e}")
                 break
 
     except Exception as e:
