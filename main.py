@@ -90,14 +90,13 @@ def task_bomtoon_tw(page):
                     minutes = int(re.search(r'(\d+)分鐘', cooldown_text).group(1)) if '分鐘' in cooldown_text else 0
                     total_minutes = hours * 60 + minutes
                     
-                    # ⚠️ 关键修改：最多只等 30 分钟
                     if total_minutes <= 30:
                         print(f"[TW] 冷却仅剩 {total_minutes} 分钟（马上就好），脚本原地等待...")
-                        time.sleep(total_minutes * 60 + 30) # 多等30秒保险
+                        time.sleep(total_minutes * 60 + 30)
                         page.reload()
                         page.wait_for_timeout(5000)
                     else:
-                        print(f"⚠️ [TW] 冷却时间较长 ({total_minutes} 分钟 > 30分钟)，为了节省额度/防掉线，本次跳过。")
+                        print(f"⚠️ [TW] 冷却时间较长 ({total_minutes} 分钟 > 30分钟)，本次跳过。")
                         break
 
                 # 2. 检查是否有次数
@@ -113,20 +112,23 @@ def task_bomtoon_tw(page):
                 if chances <= 0:
                     break
 
-                # 3. 点击参与和旋转
+                # 3. 点击参与和旋转 (加入 force=True)
                 print(f"[TW] 剩余 {chances} 次机会，点击参与...")
                 join_btn = page.get_by_role("button", name="START").first
                 if join_btn.is_visible() and join_btn.is_enabled():
-                    join_btn.click(timeout=10000)
-                    page.wait_for_timeout(4000)
+                    # 强制点击，无视遮挡
+                    join_btn.click(timeout=10000, force=True)
+                    page.wait_for_timeout(5000) # 多等一会确保弹窗完全出来
                 else:
+                    print("⚠️ [TW] 外部参与按钮不可见。")
                     break
 
                 print("[TW] 点击中间按钮开始旋转...")
                 try:
-                    page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=5000, force=True)
+                    page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=10000, force=True)
                 except Exception:
-                    page.locator('div:has-text("START")').last.click(timeout=5000, force=True)
+                    print("[TW] 找不到图片，尝试点击中心文字...")
+                    page.locator('div:has-text("START")').last.click(timeout=10000, force=True)
 
                 print("[TW] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000) 
@@ -209,14 +211,13 @@ def task_bomtoon_com(page):
                     minutes = int(re.search(r'(\d+)분', cooldown_text).group(1)) if '분' in cooldown_text else 0
                     total_minutes = hours * 60 + minutes
                     
-                    # ⚠️ 关键修改：最多只等 30 分钟
                     if total_minutes <= 30:
                         print(f"[COM] 冷却仅剩 {total_minutes} 分钟（马上就好），脚本原地等待...")
                         time.sleep(total_minutes * 60 + 30)
                         page.reload()
                         page.wait_for_timeout(5000)
                     else:
-                        print(f"⚠️ [COM] 冷却时间较长 ({total_minutes} 分钟 > 30分钟)，为了节省额度/防掉线，本次跳过。")
+                        print(f"⚠️ [COM] 冷却时间较长 ({total_minutes} 分钟 > 30分钟)，本次跳过。")
                         break
 
                 # 2. 检查是否有次数
@@ -232,20 +233,22 @@ def task_bomtoon_com(page):
                 if chances <= 0:
                     break
 
-                # 3. 点击参与和旋转
+                # 3. 点击参与和旋转 (加入 force=True)
                 print(f"[COM] 剩余 {chances} 次机会，点击参与...")
                 join_btn = page.locator('button:has-text("룰렛 돌리기")').first
                 if join_btn.is_visible() and join_btn.is_enabled():
-                    join_btn.click(timeout=10000)
-                    page.wait_for_timeout(6000) 
+                    join_btn.click(timeout=10000, force=True)
+                    page.wait_for_timeout(6000) # 给弹窗留足加载时间
                 else:
+                    print("⚠️ [COM] 外部转盘参与按钮不可见。")
                     break
 
                 print("[COM] 点击中间按钮开始旋转...")
                 try:
-                    page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=5000, force=True)
+                    page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=10000, force=True)
                 except Exception:
-                    page.locator('div:has-text("START")').last.click(timeout=5000, force=True)
+                    print("[COM] 找不到图片，尝试点击中心文字...")
+                    page.locator('div:has-text("START")').last.click(timeout=10000, force=True)
 
                 print("[COM] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000) 
