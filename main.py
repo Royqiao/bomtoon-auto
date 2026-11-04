@@ -20,7 +20,6 @@ RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL", "").strip()
 # ================= 邮件发送工具函数 =================
 def send_email(subject, body, image_path=None):
     if not all([SENDER_EMAIL, SENDER_PASS, RECEIVER_EMAIL]):
-        print("邮件配置不完整，跳过发送。")
         return False
     try:
         msg = MIMEMultipart()
@@ -28,20 +27,17 @@ def send_email(subject, body, image_path=None):
         msg['To'] = RECEIVER_EMAIL
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
-
         if image_path and os.path.exists(image_path):
             with open(image_path, 'rb') as f:
                 img = MIMEImage(f.read(), name=os.path.basename(image_path))
                 msg.attach(img)
-
         with smtplib.SMTP_SSL("smtp.qq.com", 465, timeout=15) as server:
             server.login(SENDER_EMAIL, SENDER_PASS)
             server.sendmail(SENDER_EMAIL, [RECEIVER_EMAIL], msg.as_string())
-            
         print(f"✅ 邮件发送成功：{subject}")
         return True
     except Exception as e:
-        print(f"❌ 邮件发送失败：{type(e).__name__}: {e}")
+        print(f"❌ 邮件发送失败：{e}")
         return False
 
 # ================= 平台 1：Bomtoon 台湾版 =================
@@ -57,11 +53,9 @@ def task_bomtoon_tw(page):
         except Exception:
             page.press('input[type="password"]', 'Enter')
         page.wait_for_timeout(5000)
-
         page.goto("https://www.bomtoon.tw/play", timeout=60000)
         page.wait_for_timeout(8000)
 
-        # --- 签到 ---
         print("[TW] 开始检查每日签到...")
         try:
             check_btn = page.get_by_role("button", name="CHECK")
@@ -76,22 +70,18 @@ def task_bomtoon_tw(page):
         except Exception as e:
             print(f"❌ [TW] 签到出错: {e}")
 
-        # --- 执行转盘 ---
         print("[TW] 开始检查 Lucky 大转盘...")
         for i in range(5):
             try:
-                # 1. 智能检测冷却时间
                 cooldown_locator = page.locator("text=後再轉一次").first
                 if cooldown_locator.is_visible():
                     cooldown_text = cooldown_locator.inner_text()
-                    print(f"[TW] 检测到冷却倒计时: {cooldown_text}")
-                    
                     hours = int(re.search(r'(\d+)小時', cooldown_text).group(1)) if '小時' in cooldown_text else 0
                     minutes = int(re.search(r'(\d+)分鐘', cooldown_text).group(1)) if '分鐘' in cooldown_text else 0
                     total_minutes = hours * 60 + minutes
                     
                     if total_minutes <= 30:
-                        print(f"[TW] 冷却仅剩 {total_minutes} 分钟（马上就好），脚本原地等待...")
+                        print(f"[TW] 冷却仅剩 {total_minutes} 分钟，脚本原地等待...")
                         time.sleep(total_minutes * 60 + 30)
                         page.reload()
                         page.wait_for_timeout(5000)
@@ -99,49 +89,54 @@ def task_bomtoon_tw(page):
                         print(f"⚠️ [TW] 冷却时间较长 ({total_minutes} 分钟 > 30分钟)，本次跳过。")
                         break
 
-                # 2. 检查是否有次数
                 try:
                     chance_text = page.locator("text=轉盤機會").first.inner_text(timeout=5000)
-                    print(f"[TW] 当前状态: {chance_text}")
                     match = re.search(r'(\d+)', chance_text)
                     chances = int(match.group(1)) if match else 1
                 except Exception:
-                    print("⚠️ [TW] 未找到次数文本，可能次数已用完，结束抽奖。")
                     break
                 
                 if chances <= 0:
                     break
 
-                # 3. 点击参与和旋转 (加入 force=True)
                 print(f"[TW] 剩余 {chances} 次机会，点击参与...")
                 join_btn = page.get_by_role("button", name="START").first
                 if join_btn.is_visible() and join_btn.is_enabled():
-                    # 强制点击，无视遮挡
                     join_btn.click(timeout=10000, force=True)
-                    page.wait_for_timeout(5000) # 多等一会确保弹窗完全出来
+                    page.wait_for_timeout(4000)
                 else:
-                    print("⚠️ [TW] 外部参与按钮不可见。")
                     break
 
                 print("[TW] 点击中间按钮开始旋转...")
-                try:
-                    page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=10000, force=True)
-                except Exception:
-                    print("[TW] 找不到图片，尝试点击中心文字...")
-                    page.locator('div:has-text("START")').last.click(timeout=10000, force=True)
+                # ⚠️ 修改：智能重试点击内部按钮
+                clicked = False
+                for _ in range(5):  # 最多等 5 轮，每轮 2 秒
+                    try:
+                        page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=2000, force=True)
+                        clicked = True
+                        break
+                    except Exception:
+                        page.wait_for_timeout(2000)
+                
+                if not clicked:
+                    try:
+                        page.locator('div:has-text("START")').last.click(timeout=2000, force=True)
+                        clicked = True
+                    except:
+                        print("❌ [TW] 弹窗加载失败，实在找不到 START 按钮。")
+                        break
 
                 print("[TW] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000) 
                 
-                # --- 判断中奖结果 ---
                 page_text = page.locator('body').inner_text()
                 if re.search(r'點券\s*3', page_text) or re.search(r'3\s*點券', page_text):
                     result_path = f"tw_wheel_win_{i+1}.png"
                     page.screenshot(path=result_path, full_page=True)
-                    print(f"🎉 [TW] 抽到 3 點券！发送邮件。")
-                    send_email(f"[Bomtoon TW] 中奖！抽到 3 點券", "恭喜！转盘抽到了 3 點券，详情见附图。", result_path)
+                    print(f"🎉 [TW] 抽到 3 點券！")
+                    send_email(f"[Bomtoon TW] 中奖！抽到 3 點券", "恭喜！详情见附图。", result_path)
                 else:
-                    print(f"💨 [TW] 未抽到 3 點券，不发邮件。")
+                    print(f"💨 [TW] 未抽到 3 點券。")
                 
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(2000)
@@ -159,7 +154,6 @@ def task_bomtoon_tw(page):
 def task_bomtoon_com(page):
     print("\n========== 🚀 [Bomtoon COM] 开始执行 ==========")
     if not all([BOMTOON_COM_USER, BOMTOON_COM_PASS]):
-        print("⚠️ [COM] 未配置账号密码，跳过。")
         return
 
     try:
@@ -172,21 +166,16 @@ def task_bomtoon_com(page):
         except Exception:
             page.press('input[type="password"]', 'Enter')
         page.wait_for_timeout(5000)
-
         page.goto("https://www.bomtoon.com/play", timeout=60000)
         page.wait_for_timeout(8000)
 
         if "user/login" in page.url:
-            print("⚠️ [COM] 登录失败，跳过。")
             return
 
-        # --- 执行签到 ---
         print("[COM] 开始检查每日签到...")
         try:
             is_already_checked = page.locator("text=내일 또 만나요").is_visible()
-            if is_already_checked:
-                print("⚠️ [COM] 视觉确认：页面显示已签到，跳过。")
-            else:
+            if not is_already_checked:
                 check_btn = page.locator('button:has-text("출석체크 하기")').first
                 if check_btn.is_visible():
                     check_btn.click(timeout=10000)
@@ -197,22 +186,18 @@ def task_bomtoon_com(page):
         except Exception as e:
             print(f"❌ [COM] 签到出错: {e}")
 
-        # --- 执行转盘 ---
         print("[COM] 开始检查 Lucky 大转盘...")
         for i in range(10):
             try:
-                # 1. 智能检测冷却时间
                 cooldown_locator = page.locator("text=뒤 한번 더").first
                 if cooldown_locator.is_visible():
                     cooldown_text = cooldown_locator.inner_text()
-                    print(f"[COM] 检测到冷却倒计时: {cooldown_text}")
-                    
                     hours = int(re.search(r'(\d+)시간', cooldown_text).group(1)) if '시간' in cooldown_text else 0
                     minutes = int(re.search(r'(\d+)분', cooldown_text).group(1)) if '분' in cooldown_text else 0
                     total_minutes = hours * 60 + minutes
                     
                     if total_minutes <= 30:
-                        print(f"[COM] 冷却仅剩 {total_minutes} 分钟（马上就好），脚本原地等待...")
+                        print(f"[COM] 冷却仅剩 {total_minutes} 分钟，脚本原地等待...")
                         time.sleep(total_minutes * 60 + 30)
                         page.reload()
                         page.wait_for_timeout(5000)
@@ -220,48 +205,54 @@ def task_bomtoon_com(page):
                         print(f"⚠️ [COM] 冷却时间较长 ({total_minutes} 分钟 > 30分钟)，本次跳过。")
                         break
 
-                # 2. 检查是否有次数
                 try:
                     chance_text = page.locator("text=룰렛 티켓").first.inner_text(timeout=5000)
-                    print(f"[COM] 当前状态: {chance_text}")
                     match = re.search(r'(\d+)', chance_text)
                     chances = int(match.group(1)) if match else 1
                 except Exception:
-                    print("⚠️ [COM] 未找到次数文本，可能次数已用完，结束抽奖。")
                     break
                 
                 if chances <= 0:
                     break
 
-                # 3. 点击参与和旋转 (加入 force=True)
                 print(f"[COM] 剩余 {chances} 次机会，点击参与...")
                 join_btn = page.locator('button:has-text("룰렛 돌리기")').first
                 if join_btn.is_visible() and join_btn.is_enabled():
                     join_btn.click(timeout=10000, force=True)
-                    page.wait_for_timeout(6000) # 给弹窗留足加载时间
+                    page.wait_for_timeout(6000) 
                 else:
-                    print("⚠️ [COM] 外部转盘参与按钮不可见。")
                     break
 
                 print("[COM] 点击中间按钮开始旋转...")
-                try:
-                    page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=10000, force=True)
-                except Exception:
-                    print("[COM] 找不到图片，尝试点击中心文字...")
-                    page.locator('div:has-text("START")').last.click(timeout=10000, force=True)
+                # ⚠️ 修改：智能重试点击内部按钮
+                clicked = False
+                for _ in range(5):
+                    try:
+                        page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=2000, force=True)
+                        clicked = True
+                        break
+                    except Exception:
+                        page.wait_for_timeout(2000)
+                
+                if not clicked:
+                    try:
+                        page.locator('div:has-text("START")').last.click(timeout=2000, force=True)
+                        clicked = True
+                    except:
+                        print("❌ [COM] 弹窗加载失败，实在找不到 START 按钮。")
+                        break
 
                 print("[COM] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000) 
                 
-                # --- 判断中奖结果 ---
                 page_text = page.locator('body').inner_text()
                 if re.search(r'코인\s*3', page_text) or re.search(r'3\s*코인', page_text):
                     result_path = f"com_wheel_win_{i+1}.png"
                     page.screenshot(path=result_path, full_page=True)
-                    print(f"🎉 [COM] 抽到 3 코인！发送邮件。")
-                    send_email(f"[Bomtoon COM] 中奖！抽到 3 코인", "恭喜！转盘抽到了 3 코인，详情见附图。", result_path)
+                    print(f"🎉 [COM] 抽到 3 코인！")
+                    send_email(f"[Bomtoon COM] 中奖！抽到 3 코인", "恭喜！详情见附图。", result_path)
                 else:
-                    print(f"💨 [COM] 未抽到 3 코인，不发邮件。")
+                    print(f"💨 [COM] 未抽到 3 코인。")
 
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(2000)
@@ -283,7 +274,6 @@ def main():
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             viewport={"width": 1280, "height": 800}
         )
-
         page_tw = context.new_page()
         task_bomtoon_tw(page_tw)
         page_tw.close()
@@ -291,7 +281,6 @@ def main():
         page_com = context.new_page()
         task_bomtoon_com(page_com)
         page_com.close()
-
         browser.close()
         print("\n✅ 所有平台任务执行完毕。")
 
