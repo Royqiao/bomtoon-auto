@@ -17,6 +17,7 @@ SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "").strip()
 SENDER_PASS = os.environ.get("SENDER_PASS", "").strip()
 RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL", "").strip()
 
+
 # ================= 邮件发送工具函数 =================
 def send_email(subject, body, image_path=None):
     if not all([SENDER_EMAIL, SENDER_PASS, RECEIVER_EMAIL]):
@@ -57,6 +58,11 @@ def task_bomtoon_tw(page):
         except Exception:
             page.press('input[type="password"]', 'Enter')
         page.wait_for_timeout(5000)
+
+        if "user/login" in page.url:
+            print("❌ [TW] 登录失败（仍留在登录页），终止后续任务。")
+            return
+            
         page.goto("https://www.bomtoon.tw/play", timeout=60000)
         page.wait_for_timeout(6000)
 
@@ -206,12 +212,15 @@ def task_bomtoon_com(page):
         except Exception:
             page.press('input[type="password"]', 'Enter')
         page.wait_for_timeout(5000)
-        page.goto("https://www.bomtoon.com/play", timeout=60000)
-        page.wait_for_timeout(6000)
-
+        
         if "user/login" in page.url:
             print("❌ [COM] 登录失败，留在登录页。")
             return
+        
+        page.goto("https://www.bomtoon.com/play", timeout=60000)
+        page.wait_for_timeout(6000)
+
+        
 
         # 1. 每日签到
         print("[COM] 开始检查每日签到...")
