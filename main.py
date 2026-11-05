@@ -216,35 +216,52 @@ def task_bomtoon_com(page):
                     break
 
                 print(f"[COM] 剩余 {chances} 次机会，点击参与...")
+                
+                # 1. 精确点击卡片上的【룰렛 돌리기】按钮（图1）
                 join_btn = page.locator('button:has-text("룰렛 돌리기")').first
-                if join_btn.is_visible() and join_btn.is_enabled():
-                    join_btn.click(timeout=10000, force=True)
-                    page.wait_for_timeout(6000) 
+                if join_btn.is_visible():
+                    join_btn.scroll_into_view_if_needed()
+                    join_btn.click(timeout=10000)
+                    page.wait_for_timeout(3000)
                 else:
+                    print("⚠️ [COM] 未找到参与按钮，退出循环。")
                     break
 
                 print("[COM] 点击中间按钮开始旋转...")
-                # ⚠️ 修改：智能重试点击内部按钮
+                
+                # 2. 精确点击 <dialog> 弹窗内的 START 按钮（图2）
+                # 优先定位 dialog 内部包含 btn-start 的 button，彻底避开底层卡片的小图标
+                start_btn = page.locator('dialog button:has(img[src*="btn-start.png"])').first
+                
+                # 备用选择器：如果没走 dialog 标签，则取页面上最后一个 btn-start.png 图片
+                start_img_fallback = page.locator('img[src="/images/play/btn-start.png"]').last
+
                 clicked = False
                 for _ in range(5):
                     try:
-                        page.locator('img[src="/images/play/btn-start.png"]').first.click(timeout=2000, force=True)
-                        clicked = True
-                        break
+                        if start_btn.is_visible(timeout=1500):
+                            start_btn.click(timeout=2000, force=True)
+                            clicked = True
+                            print("✅ [COM] 成功点击弹窗内的 START 按钮！")
+                            break
+                        elif start_img_fallback.is_visible(timeout=1500):
+                            start_img_fallback.click(timeout=2000, force=True)
+                            clicked = True
+                            print("✅ [COM] 成功点击弹窗内的 START 图片！")
+                            break
                     except Exception:
-                        page.wait_for_timeout(2000)
-                
+                        page.wait_for_timeout(1000)
+
                 if not clicked:
-                    try:
-                        page.locator('div:has-text("START")').last.click(timeout=2000, force=True)
-                        clicked = True
-                    except:
-                        print("❌ [COM] 弹窗加载失败，实在找不到 START 按钮。")
-                        break
+                    debug_path = f"com_wheel_fail_{i+1}.png"
+                    page.screenshot(path=debug_path, full_page=True)
+                    print(f"❌ [COM] 弹窗加载失败，实在找不到 START 按钮（已保存截图 {debug_path}）。")
+                    break
 
                 print("[COM] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000) 
                 
+                # 检查中奖结果
                 page_text = page.locator('body').inner_text()
                 if re.search(r'코인\s*3', page_text) or re.search(r'3\s*코인', page_text):
                     result_path = f"com_wheel_win_{i+1}.png"
@@ -254,11 +271,11 @@ def task_bomtoon_com(page):
                 else:
                     print(f"💨 [COM] 未抽到 3 코인。")
 
+                # 关闭弹窗（按 ESC 或点击右上角关闭）
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(2000)
                 page.reload()
                 page.wait_for_timeout(8000)
-
             except Exception as e:
                 print(f"❌ [COM] 转盘循环中断: {e}")
                 break
