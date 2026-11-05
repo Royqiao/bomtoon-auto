@@ -1,9 +1,9 @@
 name: Bomtoon Auto
 on:
   schedule:
-    # 每 5 小时触发一次（UTC 0, 5, 10, 15, 20点）
-    - cron: '0 */5 * * *'
-  workflow_dispatch: # 支持手动触发测试
+    # 避开整点，改在每 5 个小时的第 23 分钟触发（极大减少排队时间）
+    - cron: '23 */5 * * *'
+  workflow_dispatch: # 保留手动触发按钮，方便随时测试
 
 jobs:
   bomtoon-task:
