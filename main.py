@@ -173,19 +173,29 @@ def task_bomtoon_tw(page):
                 print("[TW] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000)
 
-               # 检查中奖结果（严格只识别 "免費點券 3C"，抽到 1C 或其他奖项不发邮件）
+               # 检查中奖结果：严格只识别繁体“免費點券”，并动态提取具体点券数
                 page_text = page.locator('body').inner_text()
-                
-                # 严格匹配：必须是“免費點券”紧跟“3C”（不区分大小写，兼容中间是否有空格）
-                is_win_tw = bool(re.search(r'免費點券\s*3\s*C', page_text, re.IGNORECASE))
 
-                if is_win_tw:
+                if "免費點券" in page_text:
+                    # 动态提取紧邻的数字（例如从 "免費點券 3C"、"免費點券 1C" 提取出 3 或 1）
+                    num_match = (
+                        re.search(r'免費點券\s*(\d+)', page_text, re.IGNORECASE) or
+                        re.search(r'(\d+)\s*C?\s*免費點券', page_text, re.IGNORECASE)
+                    )
+                    amount = num_match.group(1) if num_match else ""
+
                     result_path = f"tw_wheel_win_{i+1}.png"
                     page.screenshot(path=result_path, full_page=True)
-                    print("🎉 [TW] 抽到 3 點券（免費點券 3C）！")
-                    send_email("[Bomtoon TW] 中奖！抽到 3 點券", "恭喜抽中免費點券 3C！详情见附图。", result_path)
+
+                    display_num = f"{amount} " if amount else ""
+                    print(f"🎉 [TW] 抽到免費點券（{display_num}點券/C）！")
+                    send_email(
+                        f"[Bomtoon TW] 中奖！抽到 {display_num}點券",
+                        f"恭喜抽中免費點券 {display_num}C！详情见附图。",
+                        result_path
+                    )
                 else:
-                    print("💨 [TW] 未抽到 3 點券。")
+                    print("💨 [TW] 未抽到免費點券。")
 
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(2000)
@@ -336,23 +346,34 @@ def task_bomtoon_com(page):
                 print("[COM] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000)
 
-              # 检查中奖结果（增强兼容：支持 "3 보너스 코인"、"3 코인"、"보너스 코인 3" 等各种格式）
+              # 检查中奖结果：检测到“보너스 코인”或“코인”即触发，并动态提取具体硬币数
                 page_text = page.locator('body').inner_text()
-                
-                # 只要同时出现 "3" 和 "코인"，或者明确出现 "3 보너스 코인"
-                is_win = (
-                    re.search(r'3\s*(보너스\s*)?코인', page_text) or 
-                    re.search(r'(보너스\s*)?코인\s*3', page_text) or
-                    "3 보너스 코인" in page_text
+
+                # 动态提取硬币数字（支持 "3 보너스 코인", "1 보너스 코인", "3 코인", "코인 1" 等）
+                coin_match = (
+                    re.search(r'(\d+)\s*보너스\s*코인', page_text) or
+                    re.search(r'보너스\s*코인\s*(\d+)', page_text) or
+                    re.search(r'(\d+)\s*코인', page_text) or
+                    re.search(r'코인\s*(\d+)', page_text)
                 )
 
-                if is_win:
+                # 满足包含“보너스 코인”、“코인”或成功匹配到代币数字
+                has_coin = "보너스 코인" in page_text or "보너스코인" in page_text or "코인" in page_text
+
+                if has_coin and coin_match:
+                    amount = coin_match.group(1)  # 提取出的数字：1、3 等
+
                     result_path = f"com_wheel_win_{i+1}.png"
                     page.screenshot(path=result_path, full_page=True)
-                    print("🎉 [COM] 抽到 3 코인！")
-                    send_email("[Bomtoon COM] 中奖！抽到 3 코인", "恭喜抽中 3 코인！详情见附图。", result_path)
+
+                    print(f"🎉 [COM] 抽到 {amount} 코인！")
+                    send_email(
+                        f"[Bomtoon COM] 中奖！抽到 {amount} 코인",
+                        f"恭喜抽中 {amount} 코인（보너스 코인）！详情见附图。",
+                        result_path
+                    )
                 else:
-                    print("💨 [COM] 未抽到 3 코인。")
+                    print("💨 [COM] 未抽到 코인（获得积分/里程等）。")
 
                 # 关闭弹窗、刷新页面
                 page.keyboard.press("Escape")
