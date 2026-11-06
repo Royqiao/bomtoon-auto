@@ -173,13 +173,17 @@ def task_bomtoon_tw(page):
                 print("[TW] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000)
 
-                # 检查中奖结果
+               # 检查中奖结果（严格只识别 "免費點券 3C"，抽到 1C 或其他奖项不发邮件）
                 page_text = page.locator('body').inner_text()
-                if re.search(r'點券\s*3', page_text) or re.search(r'3\s*點券', page_text):
+                
+                # 严格匹配：必须是“免費點券”紧跟“3C”（不区分大小写，兼容中间是否有空格）
+                is_win_tw = bool(re.search(r'免費點券\s*3\s*C', page_text, re.IGNORECASE))
+
+                if is_win_tw:
                     result_path = f"tw_wheel_win_{i+1}.png"
                     page.screenshot(path=result_path, full_page=True)
-                    print("🎉 [TW] 抽到 3 點券！")
-                    send_email("[Bomtoon TW] 中奖！抽到 3 點券", "恭喜！详情见附图。", result_path)
+                    print("🎉 [TW] 抽到 3 點券（免費點券 3C）！")
+                    send_email("[Bomtoon TW] 中奖！抽到 3 點券", "恭喜抽中免費點券 3C！详情见附图。", result_path)
                 else:
                     print("💨 [TW] 未抽到 3 點券。")
 
@@ -332,13 +336,21 @@ def task_bomtoon_com(page):
                 print("[COM] 旋转中，等待动画结束...")
                 page.wait_for_timeout(12000)
 
-                # 检查中奖结果
+              # 检查中奖结果（增强兼容：支持 "3 보너스 코인"、"3 코인"、"보너스 코인 3" 等各种格式）
                 page_text = page.locator('body').inner_text()
-                if re.search(r'코인\s*3', page_text) or re.search(r'3\s*코인', page_text):
+                
+                # 只要同时出现 "3" 和 "코인"，或者明确出现 "3 보너스 코인"
+                is_win = (
+                    re.search(r'3\s*(보너스\s*)?코인', page_text) or 
+                    re.search(r'(보너스\s*)?코인\s*3', page_text) or
+                    "3 보너스 코인" in page_text
+                )
+
+                if is_win:
                     result_path = f"com_wheel_win_{i+1}.png"
                     page.screenshot(path=result_path, full_page=True)
                     print("🎉 [COM] 抽到 3 코인！")
-                    send_email("[Bomtoon COM] 中奖！抽到 3 코인", "恭喜！详情见附图。", result_path)
+                    send_email("[Bomtoon COM] 中奖！抽到 3 코인", "恭喜抽中 3 코인！详情见附图。", result_path)
                 else:
                     print("💨 [COM] 未抽到 3 코인。")
 
