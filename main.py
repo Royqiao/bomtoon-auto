@@ -111,7 +111,7 @@ def task_bomtoon_tw(page):
 
                 print(f"[TW] 当前识别到可用转盘机会: {chances} 次")
 
-                # 只有机会用完（<=0）时，才检查冷却倒计时
+               # 只有机会用完（<=0）时，才检查倒计时
                 if chances <= 0:
                     cooldown_locator = page.locator("text=後再轉一次").first
                     if cooldown_locator.is_visible():
@@ -120,9 +120,15 @@ def task_bomtoon_tw(page):
                         minutes = int(re.search(r'(\d+)分鐘', cooldown_text).group(1)) if '分鐘' in cooldown_text else 0
                         total_minutes = hours * 60 + minutes
 
-                        if 0 < total_minutes <= 30:
-                            print(f"[TW] 次数已用完，冷却仅剩 {total_minutes} 分钟，原地等待...")
-                            time.sleep(total_minutes * 60 + 30)
+                        if total_minutes <= 30:
+                            if total_minutes == 0:
+                                print("[TW] 冷却仅剩不到 1 分钟（显示 0 分钟），等待 60 秒倒计时归零...")
+                                time.sleep(60)
+                            else:
+                                wait_seconds = total_minutes * 60 + 15
+                                print(f"[TW] 冷却仅剩 {total_minutes} 分钟，原地等待约 {total_minutes} 分钟...")
+                                time.sleep(wait_seconds)
+
                             page.reload()
                             page.wait_for_timeout(5000)
                             continue
@@ -292,9 +298,17 @@ def task_bomtoon_com(page):
                         minutes = int(re.search(r'(\d+)분', cooldown_text).group(1)) if '분' in cooldown_text else 0
                         total_minutes = hours * 60 + minutes
 
-                        if 0 < total_minutes <= 30:
-                            print(f"[COM] 票已用完，免费转盘冷却仅剩 {total_minutes} 分钟，原地等待...")
-                            time.sleep(total_minutes * 60 + 30)
+                        # 只要在 30 分钟以内（包含 0 分钟）
+                        if total_minutes <= 30:
+                            if total_minutes == 0:
+                                # 显示 0 分钟说明只剩不到 60 秒，直接等 60 秒缓冲
+                                print("[COM] 冷却仅剩不到 1 分钟（显示 0 分钟），等待 60 秒倒计时归零...")
+                                time.sleep(60)
+                            else:
+                                wait_seconds = total_minutes * 60 + 15
+                                print(f"[COM] 冷却仅剩 {total_minutes} 分钟，原地等待约 {total_minutes} 分钟...")
+                                time.sleep(wait_seconds)
+
                             page.reload()
                             page.wait_for_timeout(5000)
                             continue
